@@ -11,6 +11,18 @@ import Matter, {
   Runner,
   World,
 } from "matter-js";
+import pic1 from "../pics/1.png";
+import pic10 from "../pics/10.png";
+import pic11 from "../pics/11.png";
+import pic2 from "../pics/2.png";
+import pic3 from "../pics/3.png";
+import pic4 from "../pics/4.png";
+import pic5 from "../pics/5.png";
+import pic6 from "../pics/6.png";
+import pic7 from "../pics/7.png";
+import pic8 from "../pics/8.png";
+import pic9 from "../pics/9.png";
+import topLinePic from "../pics/top-line.png";
 import { configs } from "./configs";
 import {
   animate,
@@ -22,6 +34,20 @@ import {
   sleep,
   watchGravity,
 } from "./utils";
+
+const ballPics = [
+  pic1,
+  pic2,
+  pic3,
+  pic4,
+  pic5,
+  pic6,
+  pic7,
+  pic8,
+  pic9,
+  pic10,
+  pic11,
+];
 
 const { width, height } = configs;
 const size = Math.sqrt(width * height);
@@ -69,7 +95,7 @@ export function createGame({
       isSensor: true,
       render: {
         sprite: {
-          texture: "./pics/top-line.png",
+          texture: topLinePic,
           xScale: width / 711,
           yScale: width / 711,
         },
@@ -117,6 +143,7 @@ export function createGame({
   type BallPrototype = {
     type: number;
     radius: number;
+    texture: string;
   };
 
   const ballPrototypes: BallPrototype[] = [
@@ -135,7 +162,8 @@ export function createGame({
     .map((size) => size * viewScale)
     .map((size, i) => ({
       type: i,
-      radius: size / 2
+      radius: size / 2,
+      texture: ballPics[i],
     }));
 
   // prefetch texture
@@ -147,7 +175,7 @@ export function createGame({
         collisionFilter: { mask: collisionCategories.disabled },
         render: {
           sprite: {
-            texture: `./pics/${ballPrototypes.indexOf(prototype) + 1}.png`,
+            texture: prototype.texture,
             xScale: 1,
             yScale: 1,
           },
@@ -232,7 +260,7 @@ export function createGame({
       {
         render: {
           sprite: {
-            texture: `./pics/${ballPrototypes.indexOf(prototype) + 1}.png`,
+            texture: prototype.texture,
             xScale: viewScale * absoluteScale,
             yScale: viewScale * absoluteScale,
           },
