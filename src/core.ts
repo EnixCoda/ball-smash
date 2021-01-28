@@ -11,19 +11,8 @@ import Matter, {
   Runner,
   World,
 } from "matter-js";
-import pic1 from "../pics/1.png";
-import pic10 from "../pics/10.png";
-import pic11 from "../pics/11.png";
-import pic2 from "../pics/2.png";
-import pic3 from "../pics/3.png";
-import pic4 from "../pics/4.png";
-import pic5 from "../pics/5.png";
-import pic6 from "../pics/6.png";
-import pic7 from "../pics/7.png";
-import pic8 from "../pics/8.png";
-import pic9 from "../pics/9.png";
-import topLinePic from "../pics/top-line.png";
 import { configs } from "./configs";
+import { ballPics, topLinePic } from "./pics";
 import {
   animate,
   createLinearTimer,
@@ -35,26 +24,12 @@ import {
   watchGravity,
 } from "./utils";
 
-const ballPics = [
-  pic1,
-  pic2,
-  pic3,
-  pic4,
-  pic5,
-  pic6,
-  pic7,
-  pic8,
-  pic9,
-  pic10,
-  pic11,
-];
-
-const { width, height } = configs;
+const { width, height } = configs.render;
 const size = Math.sqrt(width * height);
 const viewScale = size / configs.standardViewSize;
 const topLineY = size / 5;
 const ballDropFrom = size / 10;
-const stopSpeed = 1;
+const stopSpeed = 0.01;
 const groundHeight = height / 10;
 
 type Status = "idle" | "running" | "stopping" | "end";
@@ -67,21 +42,14 @@ export function createGame({
   const engine = Engine.create({
     positionIterations: 8,
     velocityIterations: 6,
-    enableSleeping: true,
+    enableSleeping: false,
   });
   const world = engine.world;
 
   const renderApp = Render.create({
     element: document.querySelector("#app") as HTMLElement,
     engine,
-    options: {
-      width,
-      height,
-      pixelRatio: devicePixelRatio,
-      background: "transparent",
-      wireframeBackground: "transparent",
-      wireframes: configs.wireframes,
-    } as any,
+    options: configs.render,
   });
 
   const collisionCategories = {
@@ -89,25 +57,30 @@ export function createGame({
   };
 
   // top line
+  const topLinePicSize = {
+    width: 711,
+    height: 8,
+  };
   const topLine = Bodies.rectangle(
     width / 2,
     topLineY,
     width,
-    (width / 711) * 8,
+    (width / topLinePicSize.width) * topLinePicSize.height,
     {
       isStatic: true,
       isSensor: true,
       render: {
         sprite: {
           texture: topLinePic,
-          xScale: width / 711,
-          yScale: width / 711,
+          xScale: width / topLinePicSize.width,
+          yScale: width / topLinePicSize.width,
         },
       },
     }
   );
   World.add(world, topLine);
 
+  const lightGroundHeight = groundHeight / 10;
   // container
   World.add(world, [
     // top
@@ -133,6 +106,16 @@ export function createGame({
       isStatic: true,
       render: { fillStyle: configs.colors.groundColor },
     }),
+    Bodies.rectangle(
+      width / 2,
+      height - groundHeight + lightGroundHeight / 2,
+      width,
+      lightGroundHeight,
+      {
+        isStatic: true,
+        render: { fillStyle: configs.colors.lightGroundColor },
+      }
+    ),
   ]);
 
   const mouse = Mouse.create(renderApp.canvas);
@@ -187,35 +170,26 @@ export function createGame({
             yScale: 1,
           },
           opacity: 0,
-          },
+        },
       })
     );
   });
 
   const createScoreControl = (onUpdate: (score: number) => void) => {
     let value = 0;
-    function onDrop(prototype: BallPrototype) {
-      // value += ballPrototypes.indexOf(prototype) + 1;
-      // onUpdate(value);
-    }
-    function onMerge(prototype: BallPrototype) {
-      value += ballPrototypes.indexOf(prototype) + 1;
-      onUpdate(value);
-    }
-    function onShrink(prototype: BallPrototype) {
-      value += ballPrototypes.indexOf(prototype) + 1;
-      onUpdate(value);
-    }
-    function reset() {
-      value = 0;
-      onUpdate(value);
-    }
-
     return {
-      onDrop,
-      onMerge,
-      onShrink,
-      reset,
+      onMerge(prototype: BallPrototype) {
+        value += ballPrototypes.indexOf(prototype) + 1;
+        onUpdate(value);
+      },
+      onShrink(prototype: BallPrototype) {
+        value += ballPrototypes.indexOf(prototype) + 1;
+        onUpdate(value);
+      },
+      reset() {
+        value = 0;
+        onUpdate(value);
+      },
     };
   };
   const scoreElement = document.querySelector(".score");
@@ -271,8 +245,8 @@ export function createGame({
         render: {
           sprite: {
             texture: prototype.texture,
-            xScale: viewScale * absoluteScale,
-            yScale: viewScale * absoluteScale,
+            xScale: viewScale * configs.textureScale * absoluteScale,
+            yScale: viewScale * configs.textureScale * absoluteScale,
           },
         },
         density:
@@ -304,8 +278,8 @@ export function createGame({
 
           const { sprite } = ball.render;
           if (sprite) {
-            sprite.xScale = viewScale * absoluteScale;
-            sprite.yScale = viewScale * absoluteScale;
+            sprite.xScale = viewScale * configs.textureScale * absoluteScale;
+            sprite.yScale = viewScale * configs.textureScale * absoluteScale;
           }
         },
         () => timer.hasStopped()
@@ -337,6 +311,14 @@ export function createGame({
     }
 
     await sleep(configs.pauseBeforeMerge);
+
+    if (status !== "running") {
+      for (const ball of [ballA, ballB]) {
+        blockMerging.delete(ball);
+        removeBall(ball);
+      }
+      return;
+    }
 
     const [mergeTo, mergeFrom] =
       ballA.position.y > ballB.position.y ? [ballA, ballB] : [ballB, ballA];
@@ -409,9 +391,6 @@ export function createGame({
         !ballsInView.has(mergeTo)
     );
 
-    scoreControl.onMerge(prototypeAfterMerge);
-
-    blockMerging.add(dummyBall);
     removeBall(dummyBall);
     for (const ball of [ballA, ballB]) {
       blockMerging.delete(ball);
@@ -419,7 +398,10 @@ export function createGame({
     }
     World.remove(world, constraint);
 
-    createBall(mergeTo.position.x, mergeTo.position.y, prototypeAfterMerge);
+    if (status === "running") {
+      scoreControl.onMerge(prototypeAfterMerge);
+      createBall(mergeTo.position.x, mergeTo.position.y, prototypeAfterMerge);
+    }
   }
 
   let nextBall: Body;
@@ -429,7 +411,7 @@ export function createGame({
         Math.floor(
           Common.random(
             0,
-            Math.min(ballsInView.size, ballPrototypes.length / 2)
+            Math.min(Math.sqrt(ballsInView.size), ballPrototypes.length / 2)
           )
         )
       ];
@@ -473,14 +455,18 @@ export function createGame({
 
     const prototype = ballsInView.get(nextBall);
     if (!prototype) return;
-    scoreControl.onDrop(prototype);
 
     // replace nextBall with updated collision filter
     removeBall(nextBall);
 
-    justDropped.add(
-      createBall(nextBall.position.x, nextBall.position.y, prototype, {}, false)
+    const ball = createBall(
+      nextBall.position.x,
+      nextBall.position.y,
+      prototype,
+      {},
+      false
     );
+    justDropped.add(ball);
 
     await sleep(configs.dropBallFreezeTime);
     if (status !== "running") return;
@@ -496,11 +482,27 @@ export function createGame({
     dropBall();
   });
 
+  const detectCollisionWithLabel = false;
   const onCollision = (e: Matter.IEventCollision<Engine>): void => {
     for (const p of e.pairs) {
-      if (p.bodyA.label === "Circle Body" && p.bodyB.label === "Circle Body") {
-        justDropped.delete(p.bodyA);
-        justDropped.delete(p.bodyB);
+      if (detectCollisionWithLabel) {
+        if (
+          p.bodyA.label === "Circle Body" &&
+          p.bodyB.label === "Circle Body"
+        ) {
+          justDropped.delete(p.bodyA);
+          justDropped.delete(p.bodyB);
+        }
+      } else {
+        if (
+          ballsInView.has(p.bodyA) &&
+          !p.bodyA.isStatic &&
+          ballsInView.has(p.bodyB) &&
+          !p.bodyB.isStatic
+        ) {
+          justDropped.delete(p.bodyB);
+          justDropped.delete(p.bodyA);
+        }
       }
       mergeBalls(p.bodyA, p.bodyB);
     }
@@ -545,15 +547,14 @@ export function createGame({
 
         const { sprite } = ball.render;
         if (sprite) {
-          sprite.xScale = viewScale * absoluteScale;
-          sprite.yScale = viewScale * absoluteScale;
+          sprite.xScale = viewScale * configs.textureScale * absoluteScale;
+          sprite.yScale = viewScale * configs.textureScale * absoluteScale;
         }
       },
       () => timer.hasStopped()
     );
   }
 
-  const parallel = false;
   const freezeOnClear = true;
   async function clearBalls() {
     if (freezeOnClear) {
@@ -561,17 +562,10 @@ export function createGame({
         Body.setStatic(ball, true);
       }
     }
-    if (parallel) {
-      return Promise.all(
-        Array.from(ballsInView.keys()).map(async (ball) => {
-          await shrinkBall(ball);
-          const prototype = ballsInView.get(ball);
-          if (prototype) scoreControl.onShrink(prototype);
-          removeBall(ball);
-        })
-      );
-    } else {
-      for (const ball of Array.from(ballsInView.keys())) {
+    for (const ball of Array.from(ballsInView.keys())) {
+      const prototype = ballsInView.get(ball);
+      if (prototype) {
+        scoreControl.onShrink(prototype);
         await shrinkBall(ball);
         removeBall(ball);
       }
@@ -614,12 +608,11 @@ export function createGame({
       const stoppedHighBalls = balls
         .filter((ball) => !blockMerging.has(ball))
         .filter((ball) => !justDropped.has(ball))
+        // .filter((ball) => colliseWithTopLine.has(ball));
+        .filter((ball) => ball.position.y - (ball.circleRadius || 0) < topLineY)
         .filter(
-          (ball) => ball.position.y - (ball.circleRadius || 0) < topLineY
+          (ball) => Math.abs(ball.velocity.x * ball.velocity.y) < stopSpeed
         );
-      // .filter(
-      //   (ball) => Math.abs(ball.velocity.x * ball.velocity.y) < stopSpeed
-      // )
       if (stoppedHighBalls.length > 0) {
         const freezeHighBalls = false;
         if (freezeHighBalls) {

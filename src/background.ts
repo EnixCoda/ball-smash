@@ -1,41 +1,36 @@
-import Matter, {
-  Runner,
-  Engine,
-  World,
-  Render,
+import {
   Bodies,
   Composite,
-  Composites
+  Composites,
+  Engine,
+  Render,
+  Runner,
+  World,
 } from "matter-js";
-import { animate, setupGravity, watchGravity } from "./utils";
 import { configs } from "./configs";
+import { animate, setupGravity, watchGravity } from "./utils";
 
 const engine = Engine.create({});
 const world = engine.world;
 
+const { width, height } = configs.render;
+
 const render = Render.create({
   element: document.querySelector("#gravity") as HTMLElement,
   engine,
-  options: {
-    width: configs.width,
-    height: configs.height,
-    wireframes: configs.wireframes,
-    pixelRatio: devicePixelRatio,
-    background: "transparent",
-    wireframeBackground: "transparent"
-  } as any
+  options: configs.render,
 });
 
 let even = 0;
 const stack = Composites.stack(
-  -configs.width / 2,
-  -configs.height / 2,
+  -width / 2,
+  -height / 2,
   16,
   1,
   0,
   0,
   (x: number, y: number) =>
-    Bodies.rectangle(x, y, configs.width / 8, configs.height * 2, {
+    Bodies.rectangle(x, y, width / 8, height * 2, {
       isStatic: true,
       isSensor: true,
       render: {
@@ -43,8 +38,8 @@ const stack = Composites.stack(
         fillStyle:
           even++ & 1
             ? configs.colors.backgroundColor
-            : configs.colors.lightBackgroundColor
-      } as any
+            : configs.colors.lightBackgroundColor,
+      } as any,
     })
 );
 World.add(world, stack);
@@ -57,8 +52,8 @@ animate(
 
     if (delta !== 0)
       Composite.rotate(stack, delta, {
-        x: configs.width / 2,
-        y: configs.height / 2
+        x: width / 2,
+        y: height / 2,
       });
   },
   () => false

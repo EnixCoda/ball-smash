@@ -1,113 +1,123 @@
 <html>
-  <head>
-    <title>Ba11s</title>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, user-scalable=no" />
-    <style>
-      html,
-      body {
-        margin: 0;
-        background: #ffe89e;
-      }
-      * {
-        user-select: none;
-        -webkit-user-select: none;
-        -webkit-touch-callout: none;
-      }
 
+<head>
+  <title>Ba11s</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, user-scalable=no" />
+  <style>
+    html,
+    body {
+      margin: 0;
+      background: #ffe89e;
+    }
+
+    * {
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
+    }
+
+    .alert {
+      display: none;
+      position: fixed;
+      font-size: 64px;
+      width: 100vw;
+      height: 100vh;
+      align-items: center;
+      justify-content: center;
+    }
+
+    @media screen and (orientation: landscape) {
       .alert {
-        display: none;
-        position: fixed;
-        width: 100vw;
-        height: 100vh;
         display: flex;
-        align-items: center;
-        justify-content: center;
+        animation: rotatePhone 3s infinite;
       }
 
-      @media screen and (orientation: portrait) {
-        .alert {
-          display: none;
-        }
-      }
-
-      @media screen and (orientation: landscape) {
-        .alert {
-          display: block;
-        }
-        #app,
-        #gravity,
-        .container,
-        .switch-gravity,
-        .score {
-          display: none !important;
-        }
-      }
-
-      #gravity,
       #app,
-      .container {
-        position: absolute;
-        top: 0;
-        left: 0;
-      }
-
-      .container {
-        width: 100vw;
-        height: 100vh;
-      }
-      .center {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-      }
-
-      button.start {
-        width: 123px;
-        height: 123px;
-        border: none;
-        background: url("./pics/play.png");
-        background-size: 100% 100%;
-      }
-
+      #gravity,
+      .container,
+      .switch-gravity,
       .score {
-        position: absolute;
-        top: 4vh;
-        left: 6vw;
-        margin: 0;
-        font-family: "Courier New", Courier, monospace;
-        font-weight: bolder;
-        color: #7b5439;
-        text-shadow: 0 0 4px #ffe89e;
-        -webkit-text-stroke: 1px #ffe89e;
-        -webkit-text-fill-color: #7b5439;
+        display: none !important;
+      }
+    }
+
+    @keyframes rotatePhone {
+      from {
+        transform: rotate(-90deg);
       }
 
-      .switch-gravity {
-        position: absolute;
-        top: 4vh;
-        right: 6vw;
-
-        font-size: 24px;
-        background: transparent;
-        border: none;
+      to {
+        transform: rotate(0deg);
       }
-    </style>
-  </head>
+    }
 
-  <body>
-    <div class="alert">
-      <h1>
-        📱🔄 请在竖屏模式游玩
-      </h1>
-    </div>
-    <div id="gravity"></div>
-    <div id="app"></div>
-    <div class="container center">
-      <button class="start"></button>
-    </div>
-    <button class="switch-gravity">🍏</button>
-    <h1 class="score">0</h1>
-    <script src="src/index.ts"></script>
-  </body>
+    #gravity,
+    #app,
+    .container {
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+
+    .container {
+      width: 100vw;
+      height: 100vh;
+    }
+
+    .center {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    button.start {
+      width: 123px;
+      height: 123px;
+      border: none;
+      background: url("./pics/play.png");
+      background-size: 100% 100%;
+    }
+
+    .score {
+      position: absolute;
+      top: 4vh;
+      left: 6vw;
+      margin: 0;
+      font-family: "Courier New", Courier, monospace;
+      font-weight: bolder;
+      color: #7b5439;
+      text-shadow: 0 0 4px #ffe89e;
+      -webkit-text-stroke: 1px #ffe89e;
+      -webkit-text-fill-color: #7b5439;
+    }
+
+    .switch-gravity {
+      position: absolute;
+      top: 4vh;
+      right: 6vw;
+
+      font-size: 24px;
+      background: transparent;
+      border: none;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="alert">
+    <h1>
+      📱
+    </h1>
+  </div>
+  <div id="gravity"></div>
+  <div id="app"></div>
+  <div class="container center">
+    <button class="start"></button>
+  </div>
+  <button class="switch-gravity">🍏</button>
+  <h1 class="score">0</h1>
+  <script src="src/index.ts"></script>
+</body>
+
 </html>
