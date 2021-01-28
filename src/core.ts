@@ -64,7 +64,11 @@ export function createGame({
 }: {
   onStatusUpdate(status: Status): void;
 }) {
-  const engine = Engine.create({});
+  const engine = Engine.create({
+    positionIterations: 8,
+    velocityIterations: 6,
+    enableSleeping: true,
+  });
   const world = engine.world;
 
   const renderApp = Render.create({
@@ -109,16 +113,19 @@ export function createGame({
     // top
     Bodies.rectangle(width / 2, -height / 2, width, height, {
       isStatic: true,
+      friction: 0,
       render: { visible: false },
     }),
     // left
     Bodies.rectangle(-width / 2, height / 2, width, height, {
       isStatic: true,
+      friction: 0,
       render: { visible: false },
     }),
     // right
     Bodies.rectangle(width + width / 2, height / 2, width, height, {
       isStatic: true,
+      friction: 0,
       render: { visible: false },
     }),
     // ground
@@ -237,7 +244,10 @@ export function createGame({
     options?: Matter.IBodyDefinition,
     grow = true
   ) {
-    const timer = createLinearTimer(configs.ballGrowDuration);
+    const timer = createLinearTimer(
+      configs.ballGrowDuration,
+      () => engine.timing.timestamp
+    );
 
     const onlyGrowVisually = true;
     const getAbsoluteScale = grow
@@ -265,7 +275,9 @@ export function createGame({
             yScale: viewScale * absoluteScale,
           },
         },
-        density: 1 / 512,
+        density:
+          ballPrototypes.indexOf(prototype) / ballPrototypes.length / 2 +
+          1 / 128,
         ...configs.ballOptions,
         ...options,
       }
@@ -357,7 +369,10 @@ export function createGame({
     );
     blockMerging.add(dummyBall);
 
-    const timer = createLinearTimer(configs.mergeDuration);
+    const timer = createLinearTimer(
+      configs.mergeDuration,
+      () => engine.timing.timestamp
+    );
     await animate(
       engine,
       () => {
@@ -510,7 +525,10 @@ export function createGame({
   });
 
   function shrinkBall(ball: Matter.Body) {
-    const timer = createLinearTimer(configs.shrinkDuration);
+    const timer = createLinearTimer(
+      configs.shrinkDuration,
+      () => engine.timing.timestamp
+    );
     return animate(
       engine,
       () => {

@@ -12,10 +12,10 @@ export const configs = {
   dropBallFreezeTime: 512,
   ballOptions: {
     friction: 8,
-    frictionAir: 1 / 512,
-    frictionStatic: 0,
-    restitution: 1 / 8,
-    slop: 0
+    frictionAir: 1 / 256,
+    frictionStatic: 1,
+    restitution: 1 / 16,
+    // slop: 0.1,
   },
   constraintOptions: {
     // damping: 0.1,
@@ -25,6 +25,6 @@ export const configs = {
   colors: {
     backgroundColor: "#ffe89e",
     lightBackgroundColor: "#fff8ae",
-    groundColor: "#7b5439"
-  }
+    groundColor: "#7b5439",
+  },
 };

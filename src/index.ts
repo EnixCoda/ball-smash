@@ -17,7 +17,7 @@ const game = createGame({
           container.style.display = "none";
         }
 
-        const autoPlay = false;
+        const autoPlay = process.env.NODE_ENV !== "production";
         if (autoPlay) {
           interval = setInterval(() => {
             game.dropBall();

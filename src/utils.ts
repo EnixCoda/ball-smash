@@ -11,11 +11,14 @@ export function sleep(duration: number) {
 
 export function withLock() {}
 
-export function createLinearTimer(duration: number) {
-  const start = Date.now();
+export function createLinearTimer(
+  duration: number,
+  getTime = () => Date.now()
+) {
+  const start = getTime();
   let stopped = false;
   function checkTime() {
-    const timePast = Date.now() - start;
+    const timePast = getTime() - start;
     if (timePast > duration) stopped = true;
     return timePast;
   }
@@ -28,7 +31,7 @@ export function createLinearTimer(duration: number) {
       if (stopped) return true;
       checkTime();
       return stopped;
-    }
+    },
   };
 }
 
