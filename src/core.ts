@@ -1,15 +1,15 @@
 import Matter, {
+  Bodies,
+  Body,
+  Common,
+  Constraint,
+  Engine,
+  Events,
   Mouse,
   MouseConstraint,
-  Common,
-  Runner,
-  Body,
-  Events,
-  Engine,
-  World,
   Render,
-  Bodies,
-  Constraint
+  Runner,
+  World,
 } from "matter-js";
 import { configs } from "./configs";
 import {
@@ -20,7 +20,7 @@ import {
   multipleLines,
   setupGravity,
   sleep,
-  watchGravity
+  watchGravity,
 } from "./utils";
 
 const { width, height } = configs;
@@ -34,7 +34,7 @@ const groundHeight = height / 10;
 type Status = "idle" | "running" | "stopping" | "end";
 
 export function createGame({
-  onStatusUpdate
+  onStatusUpdate,
 }: {
   onStatusUpdate(status: Status): void;
 }) {
@@ -50,12 +50,12 @@ export function createGame({
       pixelRatio: devicePixelRatio,
       background: "transparent",
       wireframeBackground: "transparent",
-      wireframes: configs.wireframes
-    } as any
+      wireframes: configs.wireframes,
+    } as any,
   });
 
   const collisionCategories = {
-    disabled: 0
+    disabled: 0,
   };
 
   // top line
@@ -71,9 +71,9 @@ export function createGame({
         sprite: {
           texture: "./pics/top-line.png",
           xScale: width / 711,
-          yScale: width / 711
-        }
-      }
+          yScale: width / 711,
+        },
+      },
     }
   );
   World.add(world, topLine);
@@ -83,23 +83,23 @@ export function createGame({
     // top
     Bodies.rectangle(width / 2, -height / 2, width, height, {
       isStatic: true,
-      render: { visible: false }
+      render: { visible: false },
     }),
     // left
     Bodies.rectangle(-width / 2, height / 2, width, height, {
       isStatic: true,
-      render: { visible: false }
+      render: { visible: false },
     }),
     // right
     Bodies.rectangle(width + width / 2, height / 2, width, height, {
       isStatic: true,
-      render: { visible: false }
+      render: { visible: false },
     }),
     // ground
     Bodies.rectangle(width / 2, height, width, groundHeight * 2, {
       isStatic: true,
-      render: { fillStyle: configs.colors.groundColor }
-    })
+      render: { fillStyle: configs.colors.groundColor },
+    }),
   ]);
 
   const mouse = Mouse.create(renderApp.canvas);
@@ -107,8 +107,8 @@ export function createGame({
     mouse,
     // disable mouse interactions
     collisionFilter: {
-      mask: collisionCategories.disabled
-    }
+      mask: collisionCategories.disabled,
+    },
   });
 
   World.add(world, mouseConstraint);
@@ -130,7 +130,7 @@ export function createGame({
     258,
     308,
     308,
-    404
+    404,
   ]
     .map((size) => size * viewScale)
     .map((size, i) => ({
@@ -149,10 +149,10 @@ export function createGame({
           sprite: {
             texture: `./pics/${ballPrototypes.indexOf(prototype) + 1}.png`,
             xScale: 1,
-            yScale: 1
+            yScale: 1,
           },
-          opacity: 0
-        }
+          opacity: 0,
+          },
       })
     );
   });
@@ -180,7 +180,7 @@ export function createGame({
       onDrop,
       onMerge,
       onShrink,
-      reset
+      reset,
     };
   };
   const scoreElement = document.querySelector(".score");
@@ -218,7 +218,7 @@ export function createGame({
             [
               [0, 1 / 8],
               [3 / 4, 9 / 8],
-              [1, 1]
+              [1, 1],
             ],
             timer.getProgress()
           )
@@ -234,12 +234,12 @@ export function createGame({
           sprite: {
             texture: `./pics/${ballPrototypes.indexOf(prototype) + 1}.png`,
             xScale: viewScale * absoluteScale,
-            yScale: viewScale * absoluteScale
-          }
+            yScale: viewScale * absoluteScale,
+          },
         },
         density: 1 / 512,
         ...configs.ballOptions,
-        ...options
+        ...options,
       }
     );
 
@@ -307,9 +307,9 @@ export function createGame({
       bodyB: mergeTo,
       length: ballPrototype.radius * 2,
       render: {
-        visible: configs.constraintVisible
+        visible: configs.constraintVisible,
       },
-      ...configs.constraintOptions
+      ...configs.constraintOptions,
     });
     World.add(world, constraint);
     mergeFrom.render.opacity = 0;
@@ -322,8 +322,8 @@ export function createGame({
       {
         isSensor: true,
         collisionFilter: {
-          mask: collisionCategories.disabled
-        }
+          mask: collisionCategories.disabled,
+        },
       },
       false
     );
@@ -398,8 +398,8 @@ export function createGame({
       {
         isStatic: true,
         collisionFilter: {
-          mask: collisionCategories.disabled
-        }
+          mask: collisionCategories.disabled,
+        },
       }
     );
 
@@ -414,7 +414,7 @@ export function createGame({
     if (!prototype) return;
     Body.setPosition(nextBall, {
       ...nextBall.position,
-      x: guardX(lastMouseX, width, prototype.radius)
+      x: guardX(lastMouseX, width, prototype.radius),
     });
   };
   Events.on(mouseConstraint, "mousemove", (e) => {
@@ -592,6 +592,6 @@ export function createGame({
     dropBall,
     start,
     stop,
-    gameOver
+    gameOver,
   };
 }

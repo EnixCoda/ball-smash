@@ -1,5 +1,5 @@
-import { createGame } from "./core";
 import { start as startBackground } from "./background";
+import { createGame } from "./core";
 
 const button = document.querySelector("button");
 const container: HTMLElement | null = document.querySelector(".container");
@@ -32,7 +32,7 @@ const game = createGame({
         }
       }
     }
-  }
+  },
 });
 
 if (button) {
