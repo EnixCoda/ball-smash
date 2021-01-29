@@ -2,7 +2,6 @@ import Matter, {
   Bodies,
   Body,
   Common,
-  Constraint,
   Engine,
   Events,
   Mouse,
@@ -29,7 +28,7 @@ const size = Math.sqrt(width * height);
 const viewScale = size / configs.standardViewSize;
 const topLineY = size / 5;
 const ballDropFrom = size / 10;
-const stopSpeed = 0.01;
+const stopSpeed = 0;
 const groundHeight = height / 10;
 
 type Status = "idle" | "running" | "stopping" | "end";
@@ -113,6 +112,7 @@ export function createGame({
       lightGroundHeight,
       {
         isStatic: true,
+        isSensor: true,
         render: { fillStyle: configs.colors.lightGroundColor },
       }
     ),
@@ -207,6 +207,7 @@ export function createGame({
     justDropped.delete(ball);
     World.remove(world, ball);
     ballsInView.delete(ball);
+    blockMerging.delete(ball);
   }
 
   const blockMerging = new Set<Body>();
@@ -260,32 +261,33 @@ export function createGame({
     addBall(ball, prototype);
 
     if (grow) {
-      if (configs.blockMergingWhenGrowing) blockMerging.add(ball);
-      animate(
-        engine,
-        () => {
-          if (!ballsInView.has(ball)) return;
+      (async () => {
+        if (configs.blockMergingWhenGrowing) blockMerging.add(ball);
+        await animate(
+          engine,
+          () => {
+            if (!ballsInView.has(ball)) return;
 
-          const currentRadius = ball.circleRadius;
-          if (!currentRadius) return;
+            const currentRadius = ball.circleRadius;
+            if (!currentRadius) return;
 
-          const absoluteScale = getAbsoluteScale();
-          if (!onlyGrowVisually) {
-            const relativeScale =
-              (Math.min(1, absoluteScale) * prototype.radius) / currentRadius;
-            Body.scale(ball, relativeScale, relativeScale);
-          }
+            const absoluteScale = getAbsoluteScale();
+            if (!onlyGrowVisually) {
+              const relativeScale =
+                (Math.min(1, absoluteScale) * prototype.radius) / currentRadius;
+              Body.scale(ball, relativeScale, relativeScale);
+            }
 
-          const { sprite } = ball.render;
-          if (sprite) {
-            sprite.xScale = viewScale * configs.textureScale * absoluteScale;
-            sprite.yScale = viewScale * configs.textureScale * absoluteScale;
-          }
-        },
-        () => timer.hasStopped()
-      ).then(() => {
+            const { sprite } = ball.render;
+            if (sprite) {
+              sprite.xScale = viewScale * configs.textureScale * absoluteScale;
+              sprite.yScale = viewScale * configs.textureScale * absoluteScale;
+            }
+          },
+          () => timer.hasStopped()
+        );
         if (configs.blockMergingWhenGrowing) blockMerging.delete(ball);
-      });
+      })();
     }
 
     return ball;
@@ -295,47 +297,31 @@ export function createGame({
 
   async function mergeBalls(ballA: Body, ballB: Body) {
     if (status !== "running") return;
-    for (const ball of [ballA, ballB]) {
-      if (blockMerging.has(ball)) return;
-    }
 
     const ballPrototype = ballsInView.get(ballA);
     if (!ballPrototype) return;
     if (ballsInView.get(ballB) !== ballPrototype) return;
 
-    const prototypeAfterMerge = ballPrototypes[ballPrototype.type + 1];
+    const prototypeAfterMerge =
+      ballPrototypes[ballPrototypes.indexOf(ballPrototype) + 1];
     if (!prototypeAfterMerge) return;
 
-    for (const ball of [ballA, ballB]) {
-      blockMerging.add(ball);
-    }
+    for (const ball of [ballA, ballB]) if (justDropped.has(ball)) return;
+    for (const ball of [ballA, ballB]) if (blockMerging.has(ball)) return;
+    for (const ball of [ballA, ballB]) blockMerging.add(ball);
 
     await sleep(configs.pauseBeforeMerge);
-
     if (status !== "running") {
-      for (const ball of [ballA, ballB]) {
-        blockMerging.delete(ball);
-        removeBall(ball);
-      }
+      for (const ball of [ballA, ballB]) removeBall(ball);
       return;
     }
 
     const [mergeTo, mergeFrom] =
       ballA.position.y > ballB.position.y ? [ballA, ballB] : [ballB, ballA];
 
-    // add constraint between balls, make it looks like one moves towards another
-    const constraint = Constraint.create({
-      bodyA: mergeFrom,
-      bodyB: mergeTo,
-      length: ballPrototype.radius * 2,
-      render: {
-        visible: configs.constraintVisible,
-      },
-      ...configs.constraintOptions,
-    });
-    World.add(world, constraint);
-    mergeFrom.render.opacity = 0;
+    removeBall(mergeFrom);
 
+    // create a ball at the position of mergeFrom and move it to mergeTo with no collision
     const startPosition = mergeFrom.position;
     const dummyBall = createBall(
       startPosition.x,
@@ -359,44 +345,23 @@ export function createGame({
       engine,
       () => {
         {
-          const currentRadius = mergeFrom.circleRadius;
-          if (currentRadius) {
-            const x = linear(
-              startPosition.x,
-              mergeTo.position.x,
-              timer.getProgress()
-            );
-            const y = linear(
-              startPosition.y,
-              mergeTo.position.y,
-              timer.getProgress()
-            );
-            Body.setPosition(dummyBall, { x, y });
-          }
-        }
-
-        {
-          const currentRadius = mergeTo.circleRadius;
-          if (currentRadius) {
-            const absoluteScale = linear(1, 3 / 4, timer.getProgress());
-            const relativeScale =
-              (absoluteScale * ballPrototype.radius) / currentRadius;
-            Body.scale(mergeTo, relativeScale, relativeScale);
-          }
+          const x = linear(
+            startPosition.x,
+            mergeTo.position.x,
+            timer.getProgress()
+          );
+          const y = linear(
+            startPosition.y,
+            mergeTo.position.y,
+            timer.getProgress()
+          );
+          Body.setPosition(dummyBall, { x, y });
         }
       },
-      () =>
-        timer.hasStopped() ||
-        !ballsInView.has(mergeFrom) ||
-        !ballsInView.has(mergeTo)
+      () => timer.hasStopped() || !ballsInView.has(dummyBall)
     );
-
     removeBall(dummyBall);
-    for (const ball of [ballA, ballB]) {
-      blockMerging.delete(ball);
-      removeBall(ball);
-    }
-    World.remove(world, constraint);
+    removeBall(mergeTo);
 
     if (status === "running") {
       scoreControl.onMerge(prototypeAfterMerge);
@@ -484,27 +449,20 @@ export function createGame({
 
   const detectCollisionWithLabel = false;
   const onCollision = (e: Matter.IEventCollision<Engine>): void => {
-    for (const p of e.pairs) {
-      if (detectCollisionWithLabel) {
-        if (
-          p.bodyA.label === "Circle Body" &&
-          p.bodyB.label === "Circle Body"
-        ) {
-          justDropped.delete(p.bodyA);
-          justDropped.delete(p.bodyB);
-        }
-      } else {
-        if (
-          ballsInView.has(p.bodyA) &&
-          !p.bodyA.isStatic &&
-          ballsInView.has(p.bodyB) &&
-          !p.bodyB.isStatic
-        ) {
-          justDropped.delete(p.bodyB);
-          justDropped.delete(p.bodyA);
-        }
+    for (const { bodyA, bodyB } of e.pairs) {
+      if (
+        detectCollisionWithLabel
+          ? bodyA.label === "Circle Body" && bodyB.label === "Circle Body"
+          : ballsInView.has(bodyA) &&
+            !bodyA.isStatic &&
+            ballsInView.has(bodyB) &&
+            !bodyB.isStatic
+      ) {
+        justDropped.delete(bodyB);
+        justDropped.delete(bodyA);
       }
-      mergeBalls(p.bodyA, p.bodyB);
+
+      mergeBalls(bodyA, bodyB);
     }
   };
   Events.on(engine, "collisionStart", onCollision);
@@ -540,9 +498,9 @@ export function createGame({
         const currentRadius = ball.circleRadius;
         if (!currentRadius) return;
 
-        const absoluteScale = linear(1, 0, timer.getProgress());
+        const absoluteScale = linear(1, 1 / 32, timer.getProgress());
         const relativeScale =
-          (Math.min(1, absoluteScale) * prototype.radius) / currentRadius;
+          (absoluteScale * prototype.radius) / currentRadius;
         Body.scale(ball, relativeScale, relativeScale);
 
         const { sprite } = ball.render;
@@ -593,39 +551,13 @@ export function createGame({
 
   async function gameOver() {
     status = "stopping";
+    onStatusUpdate(status);
     await clearBalls();
     await sleep(100);
     stop();
   }
 
-  animate(
-    engine,
-    async () => {
-      if (status !== "running") return;
-      const balls = Array.from(ballsInView.keys()).filter(
-        (ball) => ball !== nextBall
-      );
-      const stoppedHighBalls = balls
-        .filter((ball) => !blockMerging.has(ball))
-        .filter((ball) => !justDropped.has(ball))
-        // .filter((ball) => colliseWithTopLine.has(ball));
-        .filter((ball) => ball.position.y - (ball.circleRadius || 0) < topLineY)
-        .filter(
-          (ball) => Math.abs(ball.velocity.x * ball.velocity.y) < stopSpeed
-        );
-      if (stoppedHighBalls.length > 0) {
-        const freezeHighBalls = false;
-        if (freezeHighBalls) {
-          stoppedHighBalls.forEach((b) => {
-            ballsInView.delete(b);
-            Body.setStatic(b, true);
-          });
-        }
-        await gameOver();
-      }
-    },
-    () => false
-  );
+  detectGameOver1();
 
   return {
     dropBall,
@@ -633,4 +565,38 @@ export function createGame({
     stop,
     gameOver,
   };
+
+  function detectGameOver1() {
+    animate(
+      engine,
+      async () => {
+        if (status !== "running") return;
+        const balls = Array.from(ballsInView.keys()).filter(
+          (ball) => ball !== nextBall
+        );
+        const stoppedHighBalls = balls
+          .filter((ball) => !blockMerging.has(ball))
+          .filter((ball) => !justDropped.has(ball))
+          .filter((ball) => ball.speed === 0 && ball.angularSpeed === 0)
+          .filter(
+            (ball) => ball.position.y - (ball.circleRadius || 0) < topLineY
+          );
+        // .filter(
+        //   (ball) =>
+        //     Math.abs(ball.velocity.x) + Math.abs(ball.velocity.y) <= stopSpeed
+        // );
+        if (stoppedHighBalls.length > 0) {
+          const freezeHighBalls = false;
+          if (freezeHighBalls) {
+            stoppedHighBalls.forEach((b) => {
+              ballsInView.delete(b);
+              Body.setStatic(b, true);
+            });
+          }
+          await gameOver();
+        }
+      },
+      () => false
+    );
+  }
 }
