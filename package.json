@@ -5,7 +5,7 @@
   "main": "index.html",
   "scripts": {
     "start": "parcel index.html --open",
-    "build": "parcel build index.html && cp -r pics dist"
+    "build": "parcel build index.html"
   },
   "dependencies": {
     "@types/matter-js": "0.14.10",
