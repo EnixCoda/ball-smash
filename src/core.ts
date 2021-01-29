@@ -10,7 +10,7 @@ import Matter, {
   Runner,
   World,
 } from "matter-js";
-import { configs } from "./configs";
+import { getConfig } from "./configs";
 import { ballPics, topLinePic } from "./pics";
 import {
   animate,
@@ -23,14 +23,6 @@ import {
   watchGravity,
 } from "./utils";
 
-const { width, height } = configs.render;
-const size = Math.sqrt(width * height);
-const viewScale = size / configs.standardViewSize;
-const topLineY = size / 5;
-const ballDropFrom = size / 10;
-const stopSpeed = 0;
-const groundHeight = height / 10;
-
 type Status = "idle" | "running" | "stopping" | "end";
 
 export function createGame({
@@ -38,6 +30,35 @@ export function createGame({
 }: {
   onStatusUpdate(status: Status): void;
 }) {
+  const configs = getConfig();
+  const { width, height } = configs.render;
+  const size = Math.sqrt(width * height);
+  const viewScale = size / configs.standardViewSize;
+  const topLineY = size / 5;
+  const ballDropFrom = size / 10;
+  const groundHeight = height / 10;
+
+  const state: {
+    lockDropping: boolean;
+    gravityEnabled: boolean;
+    status: Status;
+    justDropped: Set<Matter.Body>;
+    ballsInView: Map<Body, BallPrototype>;
+    blockMerging: Set<Body>;
+  } = {
+    lockDropping: false,
+    status: "idle",
+    justDropped: new Set<Matter.Body>(),
+    ballsInView: new Map<Body, BallPrototype>(),
+    blockMerging: new Set<Body>(),
+    gravityEnabled: false,
+  };
+
+  function updateStatus(status: Status) {
+    state.status = status;
+    onStatusUpdate(status);
+  }
+
   const engine = Engine.create({
     positionIterations: 8,
     velocityIterations: 6,
@@ -197,20 +218,16 @@ export function createGame({
     if (scoreElement) scoreElement.innerHTML = `${score}`;
   });
 
-  const justDropped = new Set<Matter.Body>();
-  const ballsInView = new Map<Body, BallPrototype>();
   function addBall(ball: Matter.Body, prototype: BallPrototype) {
     World.add(world, ball);
-    ballsInView.set(ball, prototype);
+    state.ballsInView.set(ball, prototype);
   }
   function removeBall(ball: Matter.Body) {
-    justDropped.delete(ball);
+    state.justDropped.delete(ball);
     World.remove(world, ball);
-    ballsInView.delete(ball);
-    blockMerging.delete(ball);
+    state.ballsInView.delete(ball);
+    state.blockMerging.delete(ball);
   }
-
-  const blockMerging = new Set<Body>();
 
   function createBall(
     x: number,
@@ -262,11 +279,11 @@ export function createGame({
 
     if (grow) {
       (async () => {
-        if (configs.blockMergingWhenGrowing) blockMerging.add(ball);
+        if (configs.blockMergingWhenGrowing) state.blockMerging.add(ball);
         await animate(
           engine,
           () => {
-            if (!ballsInView.has(ball)) return;
+            if (!state.ballsInView.has(ball)) return;
 
             const currentRadius = ball.circleRadius;
             if (!currentRadius) return;
@@ -286,32 +303,30 @@ export function createGame({
           },
           () => timer.hasStopped()
         );
-        if (configs.blockMergingWhenGrowing) blockMerging.delete(ball);
+        if (configs.blockMergingWhenGrowing) state.blockMerging.delete(ball);
       })();
     }
 
     return ball;
   }
 
-  let status: Status = "idle";
-
   async function mergeBalls(ballA: Body, ballB: Body) {
-    if (status !== "running") return;
+    if (state.status !== "running") return;
 
-    const ballPrototype = ballsInView.get(ballA);
+    const ballPrototype = state.ballsInView.get(ballA);
     if (!ballPrototype) return;
-    if (ballsInView.get(ballB) !== ballPrototype) return;
+    if (state.ballsInView.get(ballB) !== ballPrototype) return;
 
     const prototypeAfterMerge =
       ballPrototypes[ballPrototypes.indexOf(ballPrototype) + 1];
     if (!prototypeAfterMerge) return;
 
-    for (const ball of [ballA, ballB]) if (justDropped.has(ball)) return;
-    for (const ball of [ballA, ballB]) if (blockMerging.has(ball)) return;
-    for (const ball of [ballA, ballB]) blockMerging.add(ball);
+    for (const ball of [ballA, ballB]) if (state.justDropped.has(ball)) return;
+    for (const ball of [ballA, ballB]) if (state.blockMerging.has(ball)) return;
+    for (const ball of [ballA, ballB]) state.blockMerging.add(ball);
 
     await sleep(configs.pauseBeforeMerge);
-    if (status !== "running") {
+    if (state.status !== "running") {
       for (const ball of [ballA, ballB]) removeBall(ball);
       return;
     }
@@ -335,7 +350,7 @@ export function createGame({
       },
       false
     );
-    blockMerging.add(dummyBall);
+    state.blockMerging.add(dummyBall);
 
     const timer = createLinearTimer(
       configs.mergeDuration,
@@ -358,12 +373,12 @@ export function createGame({
           Body.setPosition(dummyBall, { x, y });
         }
       },
-      () => timer.hasStopped() || !ballsInView.has(dummyBall)
+      () => timer.hasStopped() || !state.ballsInView.has(dummyBall)
     );
     removeBall(dummyBall);
     removeBall(mergeTo);
 
-    if (status === "running") {
+    if (state.status === "running") {
       scoreControl.onMerge(prototypeAfterMerge);
       createBall(mergeTo.position.x, mergeTo.position.y, prototypeAfterMerge);
     }
@@ -376,7 +391,10 @@ export function createGame({
         Math.floor(
           Common.random(
             0,
-            Math.min(Math.sqrt(ballsInView.size), ballPrototypes.length / 2)
+            Math.min(
+              Math.sqrt(state.ballsInView.size),
+              ballPrototypes.length / 2
+            )
           )
         )
       ];
@@ -396,11 +414,9 @@ export function createGame({
     nextBall = ballCircle;
   }
 
-  let lockDropping = false;
-
   let lastMouseX: number = width / 2;
   const moveNextBall = (): void => {
-    const prototype = ballsInView.get(nextBall);
+    const prototype = state.ballsInView.get(nextBall);
     if (!prototype) return;
     Body.setPosition(nextBall, {
       ...nextBall.position,
@@ -409,16 +425,16 @@ export function createGame({
   };
   Events.on(mouseConstraint, "mousemove", (e) => {
     lastMouseX = e.source.mouse.position.x;
-    if (lockDropping) return;
+    if (state.lockDropping) return;
     moveNextBall();
   });
 
   const dropBall = async () => {
-    if (status !== "running") return;
-    if (lockDropping) return;
-    lockDropping = true;
+    if (state.status !== "running") return;
+    if (state.lockDropping) return;
+    state.lockDropping = true;
 
-    const prototype = ballsInView.get(nextBall);
+    const prototype = state.ballsInView.get(nextBall);
     if (!prototype) return;
 
     // replace nextBall with updated collision filter
@@ -431,14 +447,14 @@ export function createGame({
       {},
       false
     );
-    justDropped.add(ball);
+    state.justDropped.add(ball);
 
     await sleep(configs.dropBallFreezeTime);
-    if (status !== "running") return;
+    if (state.status !== "running") return;
 
     createNextBall(lastMouseX);
 
-    lockDropping = false;
+    state.lockDropping = false;
   };
 
   Events.on(mouseConstraint, "mouseup", (e) => {
@@ -453,13 +469,13 @@ export function createGame({
       if (
         detectCollisionWithLabel
           ? bodyA.label === "Circle Body" && bodyB.label === "Circle Body"
-          : ballsInView.has(bodyA) &&
+          : state.ballsInView.has(bodyA) &&
             !bodyA.isStatic &&
-            ballsInView.has(bodyB) &&
+            state.ballsInView.has(bodyB) &&
             !bodyB.isStatic
       ) {
-        justDropped.delete(bodyB);
-        justDropped.delete(bodyA);
+        state.justDropped.delete(bodyB);
+        state.justDropped.delete(bodyA);
       }
 
       mergeBalls(bodyA, bodyB);
@@ -468,17 +484,16 @@ export function createGame({
   Events.on(engine, "collisionStart", onCollision);
   Events.on(engine, "collisionActive", onCollision);
 
-  let gravityEnabled = false;
   const switchGravity = document.querySelector(".switch-gravity");
   if (switchGravity) {
     switchGravity.addEventListener("click", async () => {
-      if (gravityEnabled) gravityEnabled = false;
-      else gravityEnabled = await setupGravity();
-      switchGravity.innerHTML = gravityEnabled ? "🍎" : "🍏";
+      if (state.gravityEnabled) state.gravityEnabled = false;
+      else state.gravityEnabled = await setupGravity();
+      switchGravity.innerHTML = state.gravityEnabled ? "🍎" : "🍏";
     });
   }
   watchGravity((alpha, beta, gamma) => {
-    if (gravityEnabled) {
+    if (state.gravityEnabled) {
       engine.world.gravity.y = beta;
       engine.world.gravity.x = gamma;
     }
@@ -492,7 +507,7 @@ export function createGame({
     return animate(
       engine,
       () => {
-        const prototype = ballsInView.get(ball);
+        const prototype = state.ballsInView.get(ball);
         if (!prototype) return;
 
         const currentRadius = ball.circleRadius;
@@ -516,12 +531,12 @@ export function createGame({
   const freezeOnClear = true;
   async function clearBalls() {
     if (freezeOnClear) {
-      for (const ball of Array.from(ballsInView.keys())) {
+      for (const ball of Array.from(state.ballsInView.keys())) {
         Body.setStatic(ball, true);
       }
     }
-    for (const ball of Array.from(ballsInView.keys())) {
-      const prototype = ballsInView.get(ball);
+    for (const ball of Array.from(state.ballsInView.keys())) {
+      const prototype = state.ballsInView.get(ball);
       if (prototype) {
         scoreControl.onShrink(prototype);
         await shrinkBall(ball);
@@ -534,24 +549,21 @@ export function createGame({
 
   function start() {
     scoreControl.reset();
-    status = "running";
-    lockDropping = false;
+    state.lockDropping = false;
     createNextBall(lastMouseX);
     Render.run(renderApp);
     Runner.run(runner, engine);
-    onStatusUpdate(status);
+    updateStatus("running");
   }
 
   function stop() {
-    status = "end";
     Render.stop(renderApp);
     Runner.stop(runner);
-    onStatusUpdate(status);
+    updateStatus("end");
   }
 
   async function gameOver() {
-    status = "stopping";
-    onStatusUpdate(status);
+    updateStatus("stopping");
     await clearBalls();
     await sleep(100);
     stop();
@@ -570,26 +582,22 @@ export function createGame({
     animate(
       engine,
       async () => {
-        if (status !== "running") return;
-        const balls = Array.from(ballsInView.keys()).filter(
+        if (state.status !== "running") return;
+        const balls = Array.from(state.ballsInView.keys()).filter(
           (ball) => ball !== nextBall
         );
         const stoppedHighBalls = balls
-          .filter((ball) => !blockMerging.has(ball))
-          .filter((ball) => !justDropped.has(ball))
+          .filter((ball) => !state.blockMerging.has(ball))
+          .filter((ball) => !state.justDropped.has(ball))
           .filter((ball) => ball.speed === 0 && ball.angularSpeed === 0)
           .filter(
             (ball) => ball.position.y - (ball.circleRadius || 0) < topLineY
           );
-        // .filter(
-        //   (ball) =>
-        //     Math.abs(ball.velocity.x) + Math.abs(ball.velocity.y) <= stopSpeed
-        // );
         if (stoppedHighBalls.length > 0) {
           const freezeHighBalls = false;
           if (freezeHighBalls) {
             stoppedHighBalls.forEach((b) => {
-              ballsInView.delete(b);
+              state.ballsInView.delete(b);
               Body.setStatic(b, true);
             });
           }

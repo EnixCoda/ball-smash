@@ -1,10 +1,10 @@
 const debugViz = false;
 
-export const configs = {
+export const getConfig = () => ({
   standardViewSize: 960,
   render: {
-    width: window.innerWidth,
-    height: window.innerHeight,
+    width: innerWidth,
+    height: innerHeight,
     pixelRatio: devicePixelRatio,
     background: "transparent",
     wireframeBackground: "transparent",
@@ -33,4 +33,4 @@ export const configs = {
     groundColor: "#7b5439",
     lightGroundColor: "#b68a52",
   },
-};
+});
