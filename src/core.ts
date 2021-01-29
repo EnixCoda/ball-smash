@@ -154,7 +154,12 @@ export function createGame({
   type BallPrototype = {
     type: number;
     radius: number;
-    texture: string;
+    texture: {
+      original: string;
+      bubble: string;
+      juice: string;
+      piece: string;
+    };
   };
 
   const ballPrototypes: BallPrototype[] = [
@@ -186,7 +191,7 @@ export function createGame({
         collisionFilter: { mask: collisionCategories.disabled },
         render: {
           sprite: {
-            texture: prototype.texture,
+            texture: prototype.texture.original,
             xScale: 1,
             yScale: 1,
           },
@@ -241,7 +246,6 @@ export function createGame({
       () => engine.timing.timestamp
     );
 
-    const onlyGrowVisually = true;
     const getAbsoluteScale = grow
       ? () =>
           multipleLines(
@@ -255,25 +259,19 @@ export function createGame({
       : () => 1;
     const absoluteScale = getAbsoluteScale();
 
-    const ball = Bodies.circle(
-      x,
-      y,
-      prototype.radius * (onlyGrowVisually ? 1 : absoluteScale),
-      {
-        render: {
-          sprite: {
-            texture: prototype.texture,
-            xScale: viewScale * configs.textureScale * absoluteScale,
-            yScale: viewScale * configs.textureScale * absoluteScale,
-          },
+    const ball = Bodies.circle(x, y, prototype.radius, {
+      render: {
+        sprite: {
+          texture: prototype.texture.original,
+          xScale: viewScale * configs.textureScale * absoluteScale,
+          yScale: viewScale * configs.textureScale * absoluteScale,
         },
-        density:
-          ballPrototypes.indexOf(prototype) / ballPrototypes.length / 2 +
-          1 / 128,
-        ...configs.ballOptions,
-        ...options,
-      }
-    );
+      },
+      density:
+        ballPrototypes.indexOf(prototype) / ballPrototypes.length / 2 + 1 / 128,
+      ...configs.ballOptions,
+      ...options,
+    });
 
     addBall(ball, prototype);
 
@@ -289,11 +287,6 @@ export function createGame({
             if (!currentRadius) return;
 
             const absoluteScale = getAbsoluteScale();
-            if (!onlyGrowVisually) {
-              const relativeScale =
-                (Math.min(1, absoluteScale) * prototype.radius) / currentRadius;
-              Body.scale(ball, relativeScale, relativeScale);
-            }
 
             const { sprite } = ball.render;
             if (sprite) {
@@ -375,6 +368,7 @@ export function createGame({
       },
       () => timer.hasStopped() || !state.ballsInView.has(dummyBall)
     );
+    removeBallAnimation(dummyBall.position, ballPrototype);
     removeBall(dummyBall);
     removeBall(mergeTo);
 
@@ -499,17 +493,171 @@ export function createGame({
     }
   });
 
+  // show juice, pieces and bubbles around ball
+  function removeBallAnimation(
+    position: Matter.Vector,
+    prototype: BallPrototype
+  ) {
+    const startPosition = { ...position };
+    const timer = createLinearTimer(
+      configs.shrinkAnimationDuration,
+      () => engine.timing.timestamp
+    );
+
+    const getJuiceTextureScale = () =>
+      (linear(1 / 4, 1, timer.getProgress()) * viewScale * prototype.radius) /
+      32;
+
+    const getJuiceOpacity = () =>
+      multipleLines(
+        [
+          [0, 0],
+          [1 / 4, 3 / 4],
+          [1, 0],
+        ],
+        timer.getProgress()
+      );
+
+    const juice = Bodies.circle(startPosition.x, startPosition.y, 1, {
+      isSensor: true,
+      isStatic: true,
+      render: {
+        opacity: getJuiceOpacity(),
+        sprite: {
+          texture: prototype.texture.juice,
+          xScale: getJuiceTextureScale(),
+          yScale: getJuiceTextureScale(),
+        },
+      },
+    });
+    World.add(world, juice);
+
+    const bubbles = Array(Math.floor(Math.random() * 4) + 4)
+      .fill(null)
+      .map(() => ({
+        delay: 1 - Math.random() / 8,
+        offset: {
+          x: (Math.random() - 1 / 2) * 6 * prototype.radius,
+          y: (Math.random() - 1 / 2) * 6 * prototype.radius,
+        },
+        bubble: Bodies.circle(
+          startPosition.x,
+          startPosition.y,
+          prototype.radius,
+          {
+            isSensor: true,
+            isStatic: true,
+            render: {
+              sprite: {
+                texture: prototype.texture.bubble,
+                xScale: 1,
+                yScale: 1,
+              },
+            },
+          }
+        ),
+      }));
+    bubbles.forEach(({ bubble }) => World.add(world, bubble));
+
+    const getPieceOpacity = (delay: number) =>
+      multipleLines(
+        [
+          [0, 0],
+          [1 / 2, 3 / 4],
+          [1, 0],
+        ],
+        timer.getProgress() * delay
+      );
+
+    const pieces = Array(Math.floor(Math.random() * 4) + 4)
+      .fill(null)
+      .map(() => {
+        const scale = (Math.random() + 1 / 3) * viewScale;
+        return {
+          delay: 1 - Math.random() / 8,
+          offset: {
+            x: (Math.random() - 1 / 2) * 6 * prototype.radius,
+            y: (Math.random() - 1 / 2) * 6 * prototype.radius,
+          },
+          piece: Bodies.circle(
+            startPosition.x,
+            startPosition.y,
+            prototype.radius,
+            {
+              isSensor: true,
+              isStatic: true,
+              angle: Math.random(),
+              angularVelocity: Math.random() * 180,
+              angularSpeed: Math.random(),
+              torque: Math.random(),
+              render: {
+                opacity: (Math.random() + 1) / 3,
+                sprite: {
+                  texture: prototype.texture.piece,
+                  xScale: scale,
+                  yScale: scale,
+                },
+              },
+            }
+          ),
+        };
+      });
+    pieces.forEach(({ piece }) => World.add(world, piece));
+
+    return animate(
+      engine,
+      () => {
+        {
+          juice.render.opacity = getJuiceOpacity();
+          const { sprite } = juice.render;
+          if (sprite) {
+            sprite.xScale = sprite.yScale = getJuiceTextureScale();
+          }
+        }
+
+        {
+          const progress = timer.getProgress();
+          bubbles.forEach(({ bubble, offset, delay }) => {
+            Body.setPosition(bubble, {
+              x: startPosition.x + offset.x * progress * delay,
+              y: startPosition.y + offset.y * progress * delay,
+            });
+            bubble.render.opacity = linear(1, 0, progress * delay);
+          });
+        }
+
+        {
+          const progress = timer.getProgress();
+          pieces.forEach(({ piece, offset, delay }) => {
+            Body.setPosition(piece, {
+              x: startPosition.x + offset.x * progress * delay,
+              y: startPosition.y + offset.y * progress * delay,
+            });
+            piece.render.opacity = getPieceOpacity(delay);
+          });
+        }
+      },
+      () => timer.hasStopped()
+    ).then(() => {
+      World.remove(world, juice);
+      bubbles.forEach(({ bubble }) => World.remove(world, bubble));
+      pieces.forEach(({ piece }) => World.remove(world, piece));
+    });
+  }
+
   function shrinkBall(ball: Matter.Body) {
     const timer = createLinearTimer(
       configs.shrinkDuration,
       () => engine.timing.timestamp
     );
+    const prototype = state.ballsInView.get(ball);
+    if (!prototype) return;
+
+    removeBallAnimation(ball.position, prototype);
+
     return animate(
       engine,
       () => {
-        const prototype = state.ballsInView.get(ball);
-        if (!prototype) return;
-
         const currentRadius = ball.circleRadius;
         if (!currentRadius) return;
 
