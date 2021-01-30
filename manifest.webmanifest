@@ -1,0 +1,15 @@
+{
+  "name": "BallSmash",
+  "short_name": "BallSmash",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#ffe89e",
+  "description": "Smash balls and get watermelons",
+  "icons": [
+    {
+      "src": "./pics/11.png",
+      "sizes": "404x404",
+      "type": "image/png"
+    }
+  ]
+}
