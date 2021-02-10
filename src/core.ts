@@ -18,18 +18,73 @@ import {
   guardX,
   linear,
   multipleLines,
+  run,
   setupGravity,
   sleep,
   watchGravity,
 } from "./utils";
 
-type Status = "idle" | "running" | "stopping" | "end";
+type BallPrototype = {
+  type: number;
+  radius: number;
+  texture: {
+    original: string;
+    bubble: string;
+    juice: string;
+    piece: string;
+  };
+};
+
+const ballPrototypes: BallPrototype[] = [
+  52,
+  80,
+  108,
+  120,
+  152,
+  184,
+  186,
+  258,
+  308,
+  308,
+  404,
+].map((size, i) => ({
+  type: i,
+  radius: size / 2,
+  texture: ballPics[i],
+}));
+
+type Step = "idle" | "running" | "stopping" | "end";
+
+const collisionCategories = {
+  disabled: 0,
+};
 
 export function createGame({
-  onStatusUpdate,
+  onStatusUpdate: onStepUpdate,
 }: {
-  onStatusUpdate(status: Status): void;
+  onStatusUpdate(step: Step): void;
 }) {
+  const state: {
+    lockDropping: boolean;
+    gravityEnabled: boolean;
+    step: Step;
+    justDropped: Set<Matter.Body>;
+    ballsInView: Map<Body, BallPrototype>;
+    blockMerging: Set<Body>;
+  } = {
+    lockDropping: false,
+    step: "idle",
+    justDropped: new Set<Matter.Body>(),
+    ballsInView: new Map<Body, BallPrototype>(),
+    blockMerging: new Set<Body>(),
+    gravityEnabled: false,
+  };
+
+  function updateStep(step: Step) {
+    state.step = step;
+    onStepUpdate(step);
+  }
+
   const configs = getConfig();
   const { width, height } = configs.render;
   const size = Math.sqrt(width * height);
@@ -38,43 +93,18 @@ export function createGame({
   const ballDropFrom = size / 10;
   const groundHeight = height / 10;
 
-  const state: {
-    lockDropping: boolean;
-    gravityEnabled: boolean;
-    status: Status;
-    justDropped: Set<Matter.Body>;
-    ballsInView: Map<Body, BallPrototype>;
-    blockMerging: Set<Body>;
-  } = {
-    lockDropping: false,
-    status: "idle",
-    justDropped: new Set<Matter.Body>(),
-    ballsInView: new Map<Body, BallPrototype>(),
-    blockMerging: new Set<Body>(),
-    gravityEnabled: false,
-  };
-
-  function updateStatus(status: Status) {
-    state.status = status;
-    onStatusUpdate(status);
-  }
-
   const engine = Engine.create({
     positionIterations: 8,
     velocityIterations: 6,
     enableSleeping: false,
   });
-  const world = engine.world;
+  const { world } = engine;
 
   const renderApp = Render.create({
     element: document.querySelector("#app") as HTMLElement,
     engine,
     options: configs.render,
   });
-
-  const collisionCategories = {
-    disabled: 0,
-  };
 
   // top line
   const topLinePicSize = {
@@ -102,42 +132,44 @@ export function createGame({
 
   const lightGroundHeight = groundHeight / 10;
   // container
-  World.add(world, [
-    // top
-    Bodies.rectangle(width / 2, -height / 2, width, height, {
-      isStatic: true,
-      friction: 0,
-      render: { visible: false },
-    }),
-    // left
-    Bodies.rectangle(-width / 2, height / 2, width, height, {
-      isStatic: true,
-      friction: 0,
-      render: { visible: false },
-    }),
-    // right
-    Bodies.rectangle(width + width / 2, height / 2, width, height, {
-      isStatic: true,
-      friction: 0,
-      render: { visible: false },
-    }),
-    // ground
-    Bodies.rectangle(width / 2, height, width, groundHeight * 2, {
-      isStatic: true,
-      render: { fillStyle: configs.colors.groundColor },
-    }),
-    Bodies.rectangle(
-      width / 2,
-      height - groundHeight + lightGroundHeight / 2,
-      width,
-      lightGroundHeight,
-      {
+  {
+    World.add(world, [
+      // top
+      Bodies.rectangle(width / 2, -height / 2, width, height, {
         isStatic: true,
-        isSensor: true,
-        render: { fillStyle: configs.colors.lightGroundColor },
-      }
-    ),
-  ]);
+        friction: 0,
+        render: { visible: false },
+      }),
+      // left
+      Bodies.rectangle(-width / 2, height / 2, width, height, {
+        isStatic: true,
+        friction: 0,
+        render: { visible: false },
+      }),
+      // right
+      Bodies.rectangle(width + width / 2, height / 2, width, height, {
+        isStatic: true,
+        friction: 0,
+        render: { visible: false },
+      }),
+      // ground
+      Bodies.rectangle(width / 2, height, width, groundHeight * 2, {
+        isStatic: true,
+        render: { fillStyle: configs.colors.groundColor },
+      }),
+      Bodies.rectangle(
+        width / 2,
+        height - groundHeight + lightGroundHeight / 2,
+        width,
+        lightGroundHeight,
+        {
+          isStatic: true,
+          isSensor: true,
+          render: { fillStyle: configs.colors.lightGroundColor },
+        }
+      ),
+    ]);
+  }
 
   const mouse = Mouse.create(renderApp.canvas);
   const mouseConstraint = MouseConstraint.create(engine, {
@@ -151,76 +183,59 @@ export function createGame({
   World.add(world, mouseConstraint);
   (renderApp as any).mouse = mouse;
 
-  type BallPrototype = {
-    type: number;
-    radius: number;
-    texture: {
-      original: string;
-      bubble: string;
-      juice: string;
-      piece: string;
-    };
-  };
-
-  const ballPrototypes: BallPrototype[] = [
-    52,
-    80,
-    108,
-    120,
-    152,
-    184,
-    186,
-    258,
-    308,
-    308,
-    404,
-  ]
-    .map((size) => size * viewScale)
-    .map((size, i) => ({
-      type: i,
-      radius: size / 2,
-      texture: ballPics[i],
-    }));
-
   // prefetch texture
-  ballPrototypes.forEach((prototype) => {
-    World.add(
-      world,
-      Bodies.circle(0, 0, 1, {
+  {
+    function createBallForTextureCache(texture: string) {
+      return Bodies.circle(0, 0, 1, {
         isStatic: true,
-        collisionFilter: { mask: collisionCategories.disabled },
+        isSensor: true,
         render: {
           sprite: {
-            texture: prototype.texture.original,
+            texture: texture,
             xScale: 1,
             yScale: 1,
           },
           opacity: 0,
         },
-      })
-    );
-  });
+      });
+    }
+    ballPrototypes.forEach((prototype) => {
+      World.add(
+        world,
+        [
+          prototype.texture.bubble,
+          prototype.texture.juice,
+          prototype.texture.original,
+          prototype.texture.piece,
+        ]
+          .filter(Boolean)
+          .map(createBallForTextureCache)
+      );
+    });
+  }
 
-  const createScoreControl = (onUpdate: (score: number) => void) => {
-    let value = 0;
-    return {
-      onMerge(prototype: BallPrototype) {
-        value += ballPrototypes.indexOf(prototype) + 1;
-        onUpdate(value);
-      },
-      onShrink(prototype: BallPrototype) {
-        value += ballPrototypes.indexOf(prototype) + 1;
-        onUpdate(value);
-      },
-      reset() {
-        value = 0;
-        onUpdate(value);
-      },
+  const scoreControl = run(() => {
+    const createScoreControl = (onUpdate: (score: number) => void) => {
+      let value = 0;
+      return {
+        onMerge(prototype: BallPrototype) {
+          value += ballPrototypes.indexOf(prototype) + 1;
+          onUpdate(value);
+        },
+        onShrink(prototype: BallPrototype) {
+          value += ballPrototypes.indexOf(prototype) + 1;
+          onUpdate(value);
+        },
+        reset() {
+          value = 0;
+          onUpdate(value);
+        },
+      };
     };
-  };
-  const scoreElement = document.querySelector(".score");
-  const scoreControl = createScoreControl((score) => {
-    if (scoreElement) scoreElement.innerHTML = `${score}`;
+    const scoreElement = document.querySelector(".score");
+    return createScoreControl((score) => {
+      if (scoreElement) scoreElement.innerHTML = `${score}`;
+    });
   });
 
   function addBall(ball: Matter.Body, prototype: BallPrototype) {
@@ -304,7 +319,7 @@ export function createGame({
   }
 
   async function mergeBalls(ballA: Body, ballB: Body) {
-    if (state.status !== "running") return;
+    if (state.step !== "running") return;
 
     const ballPrototype = state.ballsInView.get(ballA);
     if (!ballPrototype) return;
@@ -319,7 +334,7 @@ export function createGame({
     for (const ball of [ballA, ballB]) state.blockMerging.add(ball);
 
     await sleep(configs.pauseBeforeMerge);
-    if (state.status !== "running") {
+    if (state.step !== "running") {
       for (const ball of [ballA, ballB]) removeBall(ball);
       return;
     }
@@ -337,9 +352,6 @@ export function createGame({
       ballPrototype,
       {
         isSensor: true,
-        collisionFilter: {
-          mask: collisionCategories.disabled,
-        },
       },
       false
     );
@@ -372,7 +384,7 @@ export function createGame({
     removeBall(dummyBall);
     removeBall(mergeTo);
 
-    if (state.status === "running") {
+    if (state.step === "running") {
       scoreControl.onMerge(prototypeAfterMerge);
       createBall(mergeTo.position.x, mergeTo.position.y, prototypeAfterMerge);
     }
@@ -399,9 +411,7 @@ export function createGame({
       ballPrototype,
       {
         isStatic: true,
-        collisionFilter: {
-          mask: collisionCategories.disabled,
-        },
+        isSensor: true,
       }
     );
 
@@ -417,14 +427,9 @@ export function createGame({
       x: guardX(lastMouseX, width, prototype.radius),
     });
   };
-  Events.on(mouseConstraint, "mousemove", (e) => {
-    lastMouseX = e.source.mouse.position.x;
-    if (state.lockDropping) return;
-    moveNextBall();
-  });
 
   const dropBall = async () => {
-    if (state.status !== "running") return;
+    if (state.step !== "running") return;
     if (state.lockDropping) return;
     state.lockDropping = true;
 
@@ -444,18 +449,12 @@ export function createGame({
     state.justDropped.add(ball);
 
     await sleep(configs.dropBallFreezeTime);
-    if (state.status !== "running") return;
+    if (state.step !== "running") return;
 
     createNextBall(lastMouseX);
 
     state.lockDropping = false;
   };
-
-  Events.on(mouseConstraint, "mouseup", (e) => {
-    lastMouseX = e.source.mouse.position.x;
-    moveNextBall();
-    dropBall();
-  });
 
   const detectCollisionWithLabel = false;
   const onCollision = (e: Matter.IEventCollision<Engine>): void => {
@@ -693,44 +692,22 @@ export function createGame({
     }
   }
 
-  const runner = Runner.create();
+  Events.on(mouseConstraint, "mousemove", (e) => {
+    lastMouseX = e.source.mouse.position.x;
+    if (state.lockDropping) return;
+    moveNextBall();
+  });
+  Events.on(mouseConstraint, "mouseup", (e) => {
+    lastMouseX = e.source.mouse.position.x;
+    moveNextBall();
+    dropBall();
+  });
 
-  function start() {
-    scoreControl.reset();
-    state.lockDropping = false;
-    createNextBall(lastMouseX);
-    Render.run(renderApp);
-    Runner.run(runner, engine);
-    updateStatus("running");
-  }
-
-  function stop() {
-    Render.stop(renderApp);
-    Runner.stop(runner);
-    updateStatus("end");
-  }
-
-  async function gameOver() {
-    updateStatus("stopping");
-    await clearBalls();
-    await sleep(100);
-    stop();
-  }
-
-  detectGameOver1();
-
-  return {
-    dropBall,
-    start,
-    stop,
-    gameOver,
-  };
-
-  function detectGameOver1() {
+  run(function detectGameOver() {
     animate(
       engine,
       async () => {
-        if (state.status !== "running") return;
+        if (state.step !== "running") return;
         const balls = Array.from(state.ballsInView.keys()).filter(
           (ball) => ball !== nextBall
         );
@@ -754,5 +731,36 @@ export function createGame({
       },
       () => false
     );
+  });
+
+  const runner = Runner.create();
+
+  function start() {
+    scoreControl.reset();
+    state.lockDropping = false;
+    createNextBall(lastMouseX);
+    Render.run(renderApp);
+    Runner.run(runner, engine);
+    updateStep("running");
   }
+
+  function stop() {
+    Render.stop(renderApp);
+    Runner.stop(runner);
+    updateStep("end");
+  }
+
+  async function gameOver() {
+    updateStep("stopping");
+    await clearBalls();
+    await sleep(100);
+    stop();
+  }
+
+  return {
+    dropBall,
+    start,
+    stop,
+    gameOver,
+  };
 }

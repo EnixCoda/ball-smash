@@ -96,3 +96,7 @@ export function guardX(x: number, width: number, radius: number) {
   else if (x > width - radius) return width - radius;
   return x;
 }
+
+export function run<T>(fn: () => T): T {
+  return fn();
+}
