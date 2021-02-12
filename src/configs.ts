@@ -15,7 +15,7 @@ export const getConfig = () => ({
   blockMergingWhenGrowing: false,
   shrinkDuration: 128,
   shrinkAnimationDuration: 512,
-  mergeDuration: 160,
+  mergeDuration: 128,
   ballGrowDuration: 256,
   pauseBeforeMerge: 64,
   dropBallFreezeTime: 256,

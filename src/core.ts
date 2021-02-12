@@ -185,7 +185,7 @@ export function createGame({
 
   // prefetch texture
   {
-    function createBallForTextureCache(texture: string) {
+    const createBallForTextureCache = (texture: string) => {
       return Bodies.circle(0, 0, 1, {
         isStatic: true,
         isSensor: true,
@@ -198,7 +198,7 @@ export function createGame({
           opacity: 0,
         },
       });
-    }
+    };
     ballPrototypes.forEach((prototype) => {
       World.add(
         world,
@@ -274,7 +274,7 @@ export function createGame({
       : () => 1;
     const absoluteScale = getAbsoluteScale();
 
-    const ball = Bodies.circle(x, y, prototype.radius, {
+    const ball = Bodies.circle(x, y, prototype.radius * viewScale, {
       render: {
         sprite: {
           texture: prototype.texture.original,
@@ -291,7 +291,7 @@ export function createGame({
     addBall(ball, prototype);
 
     if (grow) {
-      (async () => {
+      run(async () => {
         if (configs.blockMergingWhenGrowing) state.blockMerging.add(ball);
         await animate(
           engine,
@@ -312,7 +312,7 @@ export function createGame({
           () => timer.hasStopped()
         );
         if (configs.blockMergingWhenGrowing) state.blockMerging.delete(ball);
-      })();
+      });
     }
 
     return ball;
@@ -406,7 +406,7 @@ export function createGame({
       ];
 
     const ballCircle = createBall(
-      guardX(x, width, ballPrototype.radius),
+      guardX(x, width, ballPrototype.radius * viewScale),
       ballDropFrom,
       ballPrototype,
       {
@@ -424,7 +424,7 @@ export function createGame({
     if (!prototype) return;
     Body.setPosition(nextBall, {
       ...nextBall.position,
-      x: guardX(lastMouseX, width, prototype.radius),
+      x: guardX(lastMouseX, width, prototype.radius * viewScale),
     });
   };
 
@@ -536,13 +536,13 @@ export function createGame({
       .map(() => ({
         delay: 1 - Math.random() / 8,
         offset: {
-          x: (Math.random() - 1 / 2) * 6 * prototype.radius,
-          y: (Math.random() - 1 / 2) * 6 * prototype.radius,
+          x: (Math.random() - 1 / 2) * 6 * prototype.radius * viewScale,
+          y: (Math.random() - 1 / 2) * 6 * prototype.radius * viewScale,
         },
         bubble: Bodies.circle(
           startPosition.x,
           startPosition.y,
-          prototype.radius,
+          prototype.radius * viewScale,
           {
             isSensor: true,
             isStatic: true,
@@ -575,13 +575,13 @@ export function createGame({
         return {
           delay: 1 - Math.random() / 8,
           offset: {
-            x: (Math.random() - 1 / 2) * 6 * prototype.radius,
-            y: (Math.random() - 1 / 2) * 6 * prototype.radius,
+            x: (Math.random() - 1 / 2) * 6 * prototype.radius * viewScale,
+            y: (Math.random() - 1 / 2) * 6 * prototype.radius * viewScale,
           },
           piece: Bodies.circle(
             startPosition.x,
             startPosition.y,
-            prototype.radius,
+            prototype.radius * viewScale,
             {
               isSensor: true,
               isStatic: true,
@@ -662,7 +662,7 @@ export function createGame({
 
         const absoluteScale = linear(1, 1 / 32, timer.getProgress());
         const relativeScale =
-          (absoluteScale * prototype.radius) / currentRadius;
+          (absoluteScale * prototype.radius * viewScale) / currentRadius;
         Body.scale(ball, relativeScale, relativeScale);
 
         const { sprite } = ball.render;
