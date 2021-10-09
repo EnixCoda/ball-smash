@@ -1,2 +1,3 @@
 # ball-smash
-Created with CodeSandbox
+
+All copyrights of the image assets are reserved by the original authors.
